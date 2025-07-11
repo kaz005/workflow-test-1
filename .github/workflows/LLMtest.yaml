@@ -1,0 +1,28 @@
+name: Agentic Workflow
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  agent-job:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 1) エージェントフレームワークのインストール
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      # 2) エージェントに指示
+      - name: Run Agent Plan
+        run: |
+          echo "${{ github.event.comment.body }}" > prompt.txt
+          python -m agent_squad.run_plan prompt.txt         # :contentReference[oaicite:27]{index=27}
+
+      # 3) 実行結果をリポジトリに反映
+      - name: Commit Results
+        run: |
+          git add results.json
+          git commit -m "Agent results" || true
+          git push || true
