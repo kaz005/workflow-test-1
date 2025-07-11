@@ -1,28 +1,41 @@
-name: Agentic Workflow
+name: Agentic Workflow     # Claude Code で Issue/PR コメント駆動の自動化
 
 on:
   issue_comment:
-    types: [created]
+    types: [created]       # コメントが付いたら毎回実行
 
 jobs:
   agent-job:
     runs-on: ubuntu-latest
+    permissions:           # push するために contents:write が必須
+      contents: write
+      issues: read
+      pull-requests: write
+
+    env:                   # OAuth トークンを Secrets から受け渡し
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
     steps:
+      # 0) 直近コミットをチェックアウト
       - uses: actions/checkout@v4
 
-      # 1) エージェントフレームワークのインストール
-      - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code
+      # 1) Claude Code CLI を毎回インストール
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code   #  [oai_citation:0‡YouTube](https://www.youtube.com/watch?v=zTS4pR1-r6A&utm_source=chatgpt.com)
 
-      # 2) エージェントに指示
+      # 2) コメント本文を単発プロンプト (-p) で実行し JSON 出力
       - name: Run Agent Plan
+        if: contains(github.event.comment.body, '/auto-claude')
         run: |
-          echo "${{ github.event.comment.body }}" > prompt.txt
-          python -m agent_squad.run_plan prompt.txt         # :contentReference[oaicite:27]{index=27}
+          claude -p "${{ github.event.comment.body }}" \
+            --model claude-sonnet-4-20250514 \
+            --output-format json > results.json          #  [oai_citation:1‡Anthropic](https://docs.anthropic.com/en/docs/claude-code/github-actions?utm_source=chatgpt.com) [oai_citation:2‡hexdocs.pm](https://hexdocs.pm/claude_code_sdk/ClaudeCodeSDK.Options.html?utm_source=chatgpt.com)
 
-      # 3) 実行結果をリポジトリに反映
-      - name: Commit Results
+      # 3) 実行結果(JSON)をコミット & プッシュ
+      - name: Commit agent results
         run: |
+          git config --global user.name  "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add results.json
-          git commit -m "Agent results" || true
+          git commit -m "Agent results for comment ${{ github.event.comment.id }}" || true
           git push || true
